@@ -1,35 +1,22 @@
 # SecureComm Platform
 
-Defence personnel secure messaging platform.
+Secure communication platform for defense personnel and their families.
 
-## Structure
+## Tech Stack
+- Backend: Node.js (Express, WebSocket, JWT, PostgreSQL)
+- Mobile: Flutter (iOS & Android)
+- Admin Dashboard: React (Vite)
 
-- `backend/` — Node.js WebSocket server with Express, PostgreSQL, JWT auth
-- `mobile/` — Flutter mobile app for iOS/Android
-- `admin-dashboard/` — React/Vite admin dashboard
+## Project Structure
+- `backend/` — Node.js API server
+- `mobile/` — Flutter mobile app
+- `admin-dashboard/` — Admin panel
+
+---
 
 ## Backend Setup
-
 ```bash
 cd backend
 npm install
 cp .env.example .env
-# Edit .env with your values
 node server.js
-```
-
-## Mobile Setup
-
-```bash
-cd mobile
-flutter pub get
-flutter run
-```
-
-## Admin Dashboard Setup
-
-```bash
-cd admin-dashboard
-npm install
-npm run dev
-```
