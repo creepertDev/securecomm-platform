@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureComm — HQ Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060f06;--bg2:#0d180d;--bg3:#152415;--bg4:#1c301c;
+  --accent:#4ade80;--adim:rgba(74,222,128,.12);--cyan:#22d3ee;
+  --danger:#ef4444;--warn:#facc15;--text:#dff5df;--muted:#5a875a;
+  --border:rgba(74,222,128,.18);--mono:'Courier New',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,'Segoe UI',sans-serif;min-height:100vh}
+
+/* ── LOGIN ── */
+#login-wrap{display:flex;align-items:center;justify-content:center;
+  min-height:100vh;padding:20px}
+.login-card{background:var(--bg2);border:1px solid var(--border);
+  border-radius:16px;padding:32px;width:100%;max-width:360px;text-align:center}
+.login-title{font-size:24px;font-weight:800;letter-spacing:3px;color:var(--accent);margin-bottom:4px}
+.login-sub{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:2px;margin-bottom:24px}
+.lfield{margin-bottom:14px;text-align:left}
+.lfield label{display:block;font-size:10px;color:var(--muted);font-family:var(--mono);
+  letter-spacing:2px;margin-bottom:5px}
+.lfield input{width:100%;padding:13px 14px;background:var(--bg3);border:1px solid var(--border);
+  border-radius:10px;color:var(--text);font-size:15px;outline:none;-webkit-appearance:none}
+.lfield input:focus{border-color:var(--accent)}
+.lbtn{width:100%;padding:14px;background:var(--accent);color:#060f06;border:none;
+  border-radius:10px;font-size:14px;font-weight:800;letter-spacing:2px;cursor:pointer;
+  text-transform:uppercase;transition:.15s}
+.lbtn:active{transform:scale(.98)}
+.lerr{margin-top:10px;font-size:12px;color:var(--danger);font-family:var(--mono);min-height:16px}
+
+/* ── MAIN ── */
+#main-wrap{display:none}
+
+.topbar{
+  position:sticky;top:0;z-index:50;
+  background:rgba(6,15,6,.97);border-bottom:1px solid var(--border);
+  padding:0 20px;height:52px;display:flex;align-items:center;gap:12px;
+  backdrop-filter:blur(12px);
+}
+.tlogo{font-size:16px;font-weight:800;letter-spacing:3px;color:var(--accent)}
+.tsub{font-size:10px;color:var(--muted);font-family:var(--mono)}
+.tright{margin-left:auto;display:flex;align-items:center;gap:16px;
+  font-family:var(--mono);font-size:11px;color:var(--muted)}
+.tdot{width:7px;height:7px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 6px var(--accent);display:inline-block;margin-right:5px;
+  animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+.main{padding:16px 20px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.stat-label{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:1px;margin-bottom:4px}
+.stat-val{font-size:26px;font-weight:800;color:var(--accent);font-family:var(--mono)}
+.stat-val.c{color:var(--cyan)}.stat-val.w{color:var(--warn)}.stat-val.r{color:var(--danger)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px}
+.panel-title{font-size:10px;color:var(--muted);font-family:var(--mono);
+  letter-spacing:2px;margin-bottom:12px;text-transform:uppercase}
+
+/* ── PENDING QUEUE ── */
+.req-card{
+  background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:12px;
+  animation:slideIn .3s ease;
+}
+@keyframes slideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.req-av{width:44px;height:44px;border-radius:50%;background:var(--bg4);
+  border:1.5px solid var(--border);display:flex;align-items:center;
+  justify-content:center;font-size:22px;flex-shrink:0}
+.req-info{flex:1;min-width:0}
+.req-name{font-size:14px;font-weight:700;color:var(--text)}
+.req-meta{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.req-time{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:3px}
+.req-acts{display:flex;gap:6px;flex-shrink:0}
+.btn-ok{
+  padding:8px 14px;background:rgba(74,222,128,.15);color:var(--accent);
+  border:1px solid rgba(74,222,128,.3);border-radius:7px;font-size:12px;
+  font-weight:700;cursor:pointer;letter-spacing:1px;transition:.15s;white-space:nowrap;
+}
+.btn-ok:hover{background:rgba(74,222,128,.25)}
+.btn-no{
+  padding:8px 14px;background:rgba(239,68,68,.15);color:var(--danger);
+  border:1px solid rgba(239,68,68,.3);border-radius:7px;font-size:12px;
+  font-weight:700;cursor:pointer;transition:.15s;
+}
+.btn-no:hover{background:rgba(239,68,68,.25)}
+.empty-state{text-align:center;padding:24px 0;font-size:13px;color:var(--muted);
+  font-family:var(--mono)}
+
+/* ── USER LIST ── */
+.user-row{display:flex;align-items:center;gap:10px;padding:9px 0;
+  border-bottom:1px solid rgba(74,222,128,.06)}
+.user-row:last-child{border:none}
+.u-av{font-size:22px}
+.u-name{font-size:13px;color:var(--text);font-weight:600}
+.u-role{font-size:10px;color:var(--muted);font-family:var(--mono)}
+.u-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 5px var(--accent);margin-left:auto;flex-shrink:0}
+
+/* ── AUDIT LOG ── */
+.log-box{height:280px;overflow-y:auto;scrollbar-width:thin;
+  scrollbar-color:var(--border) transparent}
+.log-box::-webkit-scrollbar{width:3px}
+.log-box::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.log-line{padding:3px 0;border-bottom:1px solid rgba(74,222,128,.04);
+  display:flex;gap:10px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.lt{color:var(--cyan);flex-shrink:0}
+.ll-OK{color:var(--accent)}.ll-DENY{color:var(--danger)}.ll-WARN{color:var(--warn)}.ll-INFO{color:var(--muted)}
+
+/* ── QR ── */
+.qr-wrap{text-align:center;padding:8px 0}
+.qr-url{font-family:var(--mono);font-size:13px;color:var(--accent);margin-bottom:10px;word-break:break-all}
+.qr-img{border:2px solid var(--border);border-radius:10px;padding:8px;background:#fff;max-width:160px}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);
+  background:var(--bg2);border:1px solid var(--border);border-radius:20px;
+  padding:8px 20px;font-size:12px;font-family:var(--mono);color:var(--accent);
+  opacity:0;transition:.3s;z-index:999;white-space:nowrap;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── BADGE ── */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;
+  font-size:10px;font-family:var(--mono);font-weight:700;margin-left:4px}
+.badge.new{background:rgba(250,204,21,.15);color:var(--warn);border:1px solid rgba(250,204,21,.3)}
+
+@media(max-width:700px){
+  .stats{grid-template-columns:1fr 1fr}
+  .grid2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-wrap">
+  <div class="login-card">
+    <div style="font-size:40px;margin-bottom:12px">⚔</div>
+    <div class="login-title">HQ ADMIN</div>
+    <div class="login-sub">SECURECOMM COMMAND CENTRE</div>
+    <div class="lfield">
+      <label>HQ PASSWORD</label>
+      <input type="password" id="admin-pass" placeholder="Enter HQ password" autocomplete="off">
+    </div>
+    <button class="lbtn" onclick="adminLogin()">ENTER COMMAND CENTRE</button>
+    <div class="lerr" id="lerr"></div>
+    <div style="margin-top:16px;font-size:10px;color:var(--muted);font-family:var(--mono)">
+      Default: hq@admin123
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main-wrap">
+  <div class="topbar">
+    <div>
+      <div class="tlogo">⚔ SECURECOMM</div>
+      <div class="tsub">HQ COMMAND DASHBOARD</div>
+    </div>
+    <div class="tright">
+      <span><span class="tdot"></span>LIVE</span>
+      <span id="clock">--:--:-- UTC</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- STATS -->
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">ONLINE</div>
+        <div class="stat-val" id="s-online">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">PENDING</div>
+        <div class="stat-val w" id="s-pending">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">APPROVED</div>
+        <div class="stat-val c" id="s-approved">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">MESSAGES</div>
+        <div class="stat-val" id="s-msgs">0</div>
+      </div>
+    </div>
+
+    <!-- PENDING + USERS -->
+    <div class="grid2">
+      <!-- APPROVAL QUEUE -->
+      <div class="panel">
+        <div class="panel-title">⚡ APPROVAL QUEUE <span class="badge new" id="pending-badge" style="display:none"></span></div>
+        <div id="queue-list">
+          <div class="empty-state">No pending requests</div>
+        </div>
+      </div>
+
+      <!-- ONLINE USERS + QR -->
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="panel" style="flex:1">
+          <div class="panel-title">👥 ONLINE PERSONNEL</div>
+          <div id="users-list"><div class="empty-state">No users online</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">📱 PHONE ACCESS — QR CODE</div>
+          <div class="qr-wrap">
+            <div class="qr-url" id="qr-url">Loading…</div>
+            <img id="qr-img" class="qr-img" style="display:none" alt="QR">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AUDIT LOG -->
+    <div class="panel">
+      <div class="panel-title">📋 LIVE AUDIT LOG</div>
+      <div class="log-box" id="log-box"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const WS_URL = `ws://${location.host}`;
+let ws = null;
+let pendingMap = {};
+
+// Clock
+setInterval(() => {
+  document.getElementById('clock').textContent =
+    new Date().toISOString().replace('T',' ').slice(0,19) + ' UTC';
+}, 1000);
+
+// QR
+fetch('/qr').then(r=>r.json()).then(d => {
+  document.getElementById('qr-url').textContent = d.url;
+  if (d.qr) { const i = document.getElementById('qr-img'); i.src = d.qr; i.style.display='inline'; }
+}).catch(()=>{});
+
+// Poll status for approved count + msg count
+setInterval(() => {
+  fetch('/status').then(r=>r.json()).then(d => {
+    document.getElementById('s-approved').textContent = d.approved;
+    document.getElementById('s-msgs').textContent = d.messageCount;
+  }).catch(()=>{});
+}, 3000);
+
+function adminLogin() {
+  const pass = document.getElementById('admin-pass').value;
+  document.getElementById('lerr').textContent = '';
+  connect(() => ws.send(JSON.stringify({ type: 'admin_login', password: pass })));
+}
+document.getElementById('admin-pass').addEventListener('keydown', e => { if (e.key==='Enter') adminLogin(); });
+
+function connect(onOpen) {
+  if (ws) { try { ws.close(); } catch{} }
+  ws = new WebSocket(WS_URL);
+  ws.onopen = onOpen;
+  ws.onmessage = e => { try { handle(JSON.parse(e.data)); } catch{} };
+  ws.onclose = () => { log('WARN', 'Connection lost — reconnecting…'); setTimeout(reconnect, 3000); };
+  ws.onerror = () => {};
+}
+
+function reconnect() {
+  connect(() => ws.send(JSON.stringify({ type: 'admin_login', password: document.getElementById('admin-pass').value })));
+}
+
+function handle(msg) {
+  switch(msg.type) {
+
+    case 'admin_welcome':
+      document.getElementById('login-wrap').style.display = 'none';
+      document.getElementById('main-wrap').style.display = 'block';
+      log('INFO', 'HQ Admin dashboard connected');
+      renderPendingList(msg.pendingRequests);
+      renderUsers(msg.users);
+      document.getElementById('s-msgs').textContent = msg.messageCount;
+      break;
+
+    case 'login_error':
+      document.getElementById('lerr').textContent = msg.message;
+      break;
+
+    case 'new_request':
+      pendingMap[msg.request.reqId] = msg.request;
+      renderPendingList(Object.values(pendingMap));
+      log('WARN', `New access request: ${msg.request.name} (${msg.request.role})`);
+      toast(`🔔 New request: ${msg.request.name}`);
+      break;
+
+    case 'request_resolved':
+      delete pendingMap[msg.reqId];
+      renderPendingList(msg.pendingRequests);
+      // update local map
+      pendingMap = {};
+      msg.pendingRequests.forEach(r => pendingMap[r.reqId] = r);
+      const action = msg.action === 'approved' ? '✓ Approved' : '✕ Rejected';
+      log(msg.action === 'approved' ? 'OK' : 'DENY', `${action}: ${msg.name}`);
+      break;
+
+    case 'action_ok':
+      toast(msg.message);
+      break;
+
+    case 'user_joined':
+      renderUsers(msg.users);
+      log('INFO', `User joined: ${msg.user.name} (${msg.user.role})`);
+      break;
+
+    case 'user_left':
+      renderUsers(msg.users);
+      log('INFO', `User left`);
+      break;
+
+    case 'message':
+      log('INFO', `MSG ${msg.from.name}: ${msg.text.slice(0,60)}`);
+      const sm = parseInt(document.getElementById('s-msgs').textContent)||0;
+      document.getElementById('s-msgs').textContent = sm + 1;
+      break;
+
+    case 'error':
+      toast('⚠ ' + msg.message);
+      break;
+  }
+}
+
+function renderPendingList(list) {
+  const el = document.getElementById('queue-list');
+  const badge = document.getElementById('pending-badge');
+  document.getElementById('s-pending').textContent = list.length;
+
+  if (!list || list.length === 0) {
+    el.innerHTML = '<div class="empty-state">No pending requests<br><span style="font-size:10px">Requests from phones appear here in real time</span></div>';
+    badge.style.display = 'none';
+    return;
+  }
+
+  badge.style.display = 'inline-flex';
+  badge.textContent = list.length + ' NEW';
+
+  el.innerHTML = '';
+  list.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'req-card';
+    div.id = 'req-' + r.reqId;
+    const ago = Math.floor((Date.now() - r.ts) / 1000);
+    const agoStr = ago < 60 ? ago + 's ago' : Math.floor(ago/60) + 'm ago';
+    div.innerHTML = `
+      <div class="req-av">${r.avatar}</div>
+      <div class="req-info">
+        <div class="req-name">${esc(r.name)}</div>
+        <div class="req-meta">Role: ${esc(r.role)}</div>
+        <div class="req-time">REF: ${r.reqId.toUpperCase()} · ${agoStr}</div>
+      </div>
+      <div class="req-acts">
+        <button class="btn-ok" onclick="approve('${r.reqId}','${esc(r.name)}')">✓ APPROVE</button>
+        <button class="btn-no" onclick="reject('${r.reqId}','${esc(r.name)}')">✕</button>
+      </div>`;
+    el.appendChild(div);
+  });
+}
+
+function renderUsers(users) {
+  const el = document.getElementById('users-list');
+  // filter out admin
+  const real = users.filter(u => u.role !== 'admin');
+  document.getElementById('s-online').textContent = real.length;
+  if (!real.length) { el.innerHTML = '<div class="empty-state">No users online</div>'; return; }
+  el.innerHTML = real.map(u => `
+    <div class="user-row">
+      <div class="u-av">${u.avatar}</div>
+      <div>
+        <div class="u-name">${esc(u.name)}</div>
+        <div class="u-role">${u.role}</div>
+      </div>
+      <div class="u-dot"></div>
+    </div>`).join('');
+}
+
+function approve(reqId, name) {
+  const card = document.getElementById('req-' + reqId);
+  if (card) { card.style.opacity = '.5'; card.querySelector('.req-acts').innerHTML = '<span style="font-size:12px;color:var(--accent);font-family:var(--mono)">Processing…</span>'; }
+  ws.send(JSON.stringify({ type: 'approve', reqId }));
+}
+
+function reject(reqId, name) {
+  if (!confirm(`Reject access for ${name}?`)) return;
+  const card = document.getElementById('req-' + reqId);
+  if (card) { card.style.opacity = '.5'; }
+  ws.send(JSON.stringify({ type: 'reject', reqId }));
+}
+
+function log(level, msg) {
+  const el = document.getElementById('log-box');
+  const t = new Date().toTimeString().slice(0,8);
+  const d = document.createElement('div');
+  d.className = 'log-line';
+  d.innerHTML = `<span class="lt">${t}</span><span class="ll-${level}">[${level}]</span><span>${esc(msg)}</span>`;
+  el.insertBefore(d, el.firstChild);
+  if (el.children.length > 150) el.lastChild.remove();
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>

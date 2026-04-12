@@ -1,0 +1,22 @@
+{
+  "name": "securecomm",
+  "version": "1.0.0",
+  "description": "SecureComm defence messaging backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1",
+    "qrcode": "^1.5.4",
+    "ws": "^8.20.0"
+  }
+}

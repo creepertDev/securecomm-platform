@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#060f06">
+<title>SecureComm</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#060f06;--bg2:#0d180d;--bg3:#152415;--bg4:#1c301c;
+  --accent:#4ade80;--adim:rgba(74,222,128,.14);--a2:rgba(74,222,128,.25);
+  --cyan:#22d3ee;--danger:#ef4444;--warn:#facc15;
+  --text:#dff5df;--muted:#5a875a;--border:rgba(74,222,128,.2);
+  --safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px}
+
+/* ── SCREENS ── */
+.screen{display:none;flex-direction:column;height:100dvh;overflow-y:auto}
+.screen.active{display:flex}
+
+/* ── SHARED HEADER ── */
+.app-header{
+  text-align:center;padding:28px 20px 20px;
+  padding-top:calc(var(--safe-top) + 28px);
+}
+.shield{
+  width:68px;height:68px;margin:0 auto 12px;
+  background:linear-gradient(135deg,#c0392b,#e74c3c,#c0392b);
+  clip-path:polygon(50% 0%,100% 20%,100% 75%,50% 100%,0% 75%,0% 20%);
+  display:flex;align-items:center;justify-content:center;
+  font-size:26px;color:#fff;position:relative;
+}
+.shield::after{content:'⚔';position:absolute;font-size:22px}
+.app-title{font-size:28px;font-weight:800;letter-spacing:4px;color:var(--accent);
+  text-shadow:0 0 20px rgba(74,222,128,.3)}
+.app-sub{font-size:11px;color:var(--muted);letter-spacing:3px;margin-top:3px;
+  font-family:'Courier New',monospace}
+
+/* ── CARD ── */
+.card{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:18px;padding:22px;margin:0 16px 20px;
+  box-shadow:0 4px 24px rgba(0,0,0,.5);
+}
+
+/* ── TABS ── */
+.tab-row{display:grid;grid-template-columns:1fr 1fr;gap:0;
+  background:var(--bg3);border-radius:10px;padding:3px;margin-bottom:20px}
+.tab-btn{
+  padding:10px;border:none;border-radius:8px;font-size:13px;font-weight:700;
+  letter-spacing:1px;cursor:pointer;background:transparent;color:var(--muted);
+  transition:.2s;text-transform:uppercase;
+}
+.tab-btn.active{background:var(--accent);color:#060f06}
+
+/* ── FIELDS ── */
+.field{margin-bottom:14px}
+.field-label{font-size:10px;color:var(--muted);letter-spacing:2px;
+  font-family:'Courier New',monospace;margin-bottom:5px;display:block}
+.field-input{
+  width:100%;padding:13px 14px;background:var(--bg3);
+  border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-size:15px;outline:none;
+  -webkit-appearance:none;transition:border-color .2s;
+}
+.field-input:focus{border-color:var(--accent)}
+.field-input::placeholder{color:var(--muted)}
+select.field-input{cursor:pointer}
+
+/* ── AVATAR GRID ── */
+.avatar-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:6px}
+.av-opt{
+  aspect-ratio:1;background:var(--bg3);border:2px solid transparent;
+  border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-size:24px;cursor:pointer;transition:.15s;
+}
+.av-opt.sel{border-color:var(--accent);background:var(--adim)}
+
+/* ── BUTTONS ── */
+.btn-primary{
+  width:100%;padding:15px;background:var(--accent);color:#060f06;
+  border:none;border-radius:12px;font-size:15px;font-weight:800;
+  letter-spacing:2px;cursor:pointer;margin-top:6px;transition:.15s;
+  text-transform:uppercase;-webkit-appearance:none;
+}
+.btn-primary:active{transform:scale(.98);opacity:.9}
+.btn-primary:disabled{background:var(--bg4);color:var(--muted);cursor:default}
+
+/* ── STATUS MSG ── */
+.status-msg{
+  text-align:center;margin-top:12px;font-size:12px;
+  font-family:'Courier New',monospace;min-height:16px;
+}
+.status-msg.ok{color:var(--accent)}
+.status-msg.err{color:var(--danger)}
+.status-msg.info{color:var(--warn)}
+
+/* ── PENDING SCREEN ── */
+#pending-screen{align-items:center;justify-content:center;padding:32px 20px;
+  padding-top:calc(var(--safe-top)+32px)}
+.pending-icon{font-size:56px;margin-bottom:16px;animation:spin 6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pending-title{font-size:22px;font-weight:700;color:var(--warn);margin-bottom:8px;text-align:center}
+.pending-sub{font-size:13px;color:var(--muted);text-align:center;line-height:1.6;max-width:280px}
+.pending-id{
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:10px 16px;margin-top:16px;font-family:'Courier New',monospace;
+  font-size:11px;color:var(--cyan);letter-spacing:1px;text-align:center;
+}
+.dots{display:inline-flex;gap:4px;margin-left:4px}
+.dots span{width:5px;height:5px;border-radius:50%;background:var(--warn);
+  animation:dot 1.2s infinite}
+.dots span:nth-child(2){animation-delay:.2s}
+.dots span:nth-child(3){animation-delay:.4s}
+@keyframes dot{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+
+/* ── CHAT SCREEN ── */
+#chat-screen{background:var(--bg)}
+
+.chat-bar{
+  background:rgba(6,15,6,.97);border-bottom:1px solid var(--border);
+  padding:10px 14px;padding-top:calc(var(--safe-top)+10px);
+  display:flex;align-items:center;gap:10px;flex-shrink:0;
+}
+.cbar-av{width:36px;height:36px;border-radius:50%;background:var(--bg3);
+  border:1.5px solid var(--border);display:flex;align-items:center;
+  justify-content:center;font-size:19px;flex-shrink:0}
+.cbar-name{font-size:15px;font-weight:700;color:var(--text)}
+.cbar-sub{font-size:10px;color:var(--accent);font-family:'Courier New',monospace}
+.cbar-right{margin-left:auto;display:flex;gap:10px;align-items:center}
+.online-pill{background:var(--adim);border:1px solid var(--border);
+  border-radius:20px;padding:3px 10px;font-size:11px;color:var(--accent);
+  font-family:'Courier New',monospace}
+
+.conn-bar{display:none;padding:7px 14px;font-size:11px;text-align:center;
+  font-family:'Courier New',monospace}
+.conn-bar.on{display:block;background:rgba(250,204,21,.08);color:var(--warn);
+  border-bottom:1px solid rgba(250,204,21,.2)}
+.conn-bar.err{display:block;background:rgba(239,68,68,.08);color:var(--danger);
+  border-bottom:1px solid rgba(239,68,68,.2)}
+
+.messages{flex:1;overflow-y:auto;padding:10px 12px 4px;
+  display:flex;flex-direction:column;gap:2px;scroll-behavior:smooth;
+  -webkit-overflow-scrolling:touch}
+.messages::-webkit-scrollbar{width:0}
+
+.sys-msg{text-align:center;padding:6px;margin:4px 0;
+  font-size:11px;color:var(--muted);font-family:'Courier New',monospace}
+
+.msg-grp{display:flex;flex-direction:column;margin:4px 0}
+.msg-grp.mine{align-items:flex-end}
+.msg-grp.theirs{align-items:flex-start}
+.msg-sender{font-size:11px;color:var(--cyan);font-family:'Courier New',monospace;
+  margin:0 6px 2px;display:flex;align-items:center;gap:5px}
+.bubble-row{display:flex;align-items:flex-end;gap:6px;max-width:84%}
+.msg-grp.mine .bubble-row{flex-direction:row-reverse}
+.bubble{padding:9px 13px;font-size:15px;line-height:1.45;word-break:break-word}
+.msg-grp.theirs .bubble{background:var(--bg3);border:1px solid rgba(74,222,128,.1);
+  border-radius:4px 16px 16px 16px;color:var(--text)}
+.msg-grp.mine .bubble{background:var(--adim);border:1px solid var(--a2);
+  border-radius:16px 4px 16px 16px;color:var(--accent)}
+.msg-time{font-size:10px;color:var(--muted);font-family:'Courier New',monospace;
+  margin:2px 6px 0}
+.msg-grp.mine .msg-time{text-align:right}
+
+.typing-bar{min-height:16px;padding:0 14px 2px;font-size:11px;
+  color:var(--muted);font-family:'Courier New',monospace;font-style:italic}
+.typing-dots{display:inline-flex;gap:3px;margin-left:4px}
+.typing-dots span{width:4px;height:4px;border-radius:50%;background:var(--muted);
+  display:inline-block;animation:tdot 1.2s infinite}
+.typing-dots span:nth-child(2){animation-delay:.2s}
+.typing-dots span:nth-child(3){animation-delay:.4s}
+@keyframes tdot{0%,80%,100%{transform:scale(.8);opacity:.4}40%{transform:scale(1.1);opacity:1}}
+
+.input-area{
+  background:rgba(6,15,6,.97);border-top:1px solid var(--border);
+  padding:10px 12px;padding-bottom:calc(var(--safe-bot)+10px);
+  display:flex;align-items:flex-end;gap:8px;flex-shrink:0;
+}
+.msg-input{
+  flex:1;background:var(--bg3);border:1px solid var(--border);
+  border-radius:20px;padding:10px 16px;color:var(--text);font-size:15px;
+  outline:none;resize:none;max-height:120px;overflow-y:auto;line-height:1.4;
+  font-family:inherit;-webkit-appearance:none;
+}
+.msg-input:focus{border-color:rgba(74,222,128,.4)}
+.msg-input::placeholder{color:var(--muted)}
+.send-btn{
+  width:42px;height:42px;border-radius:50%;background:var(--accent);border:none;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  flex-shrink:0;font-size:18px;color:#060f06;transition:.15s;-webkit-appearance:none;
+}
+.send-btn:active{transform:scale(.92)}
+.send-btn:disabled{background:var(--bg4);color:var(--muted);cursor:default}
+
+/* toast */
+#toast{
+  position:fixed;bottom:calc(var(--safe-bot)+80px);left:50%;
+  transform:translateX(-50%) translateY(16px);
+  background:var(--bg2);border:1px solid var(--border);border-radius:20px;
+  padding:8px 18px;font-size:12px;font-family:'Courier New',monospace;
+  color:var(--accent);opacity:0;transition:.3s;z-index:999;
+  white-space:nowrap;pointer-events:none;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ══ AUTH SCREEN ══ -->
+<div id="auth-screen" class="screen active">
+  <div class="app-header">
+    <div class="shield"></div>
+    <div class="app-title">SECURECOMM</div>
+    <div class="app-sub">DEFENCE COMMUNICATION NETWORK</div>
+  </div>
+
+  <div class="card">
+    <div class="tab-row">
+      <button class="tab-btn" id="tab-login" onclick="switchTab('login')">LOGIN</button>
+      <button class="tab-btn active" id="tab-reg" onclick="switchTab('reg')">REGISTER</button>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="form-reg">
+      <div class="field">
+        <label class="field-label">FULL NAME / RANK</label>
+        <input class="field-input" id="reg-name" placeholder="e.g. Maj R. Sharma" maxlength="32" autocomplete="off" autocorrect="off">
+      </div>
+      <div class="field">
+        <label class="field-label">SET PASSWORD</label>
+        <input class="field-input" id="reg-pass" type="password" placeholder="Min 4 characters" maxlength="32">
+      </div>
+      <div class="field">
+        <label class="field-label">ROLE</label>
+        <select class="field-input" id="reg-role">
+          <option value="officer">Officer</option>
+          <option value="nco">NCO / JCO</option>
+          <option value="personnel">Other Rank</option>
+          <option value="family" selected>Family Member</option>
+          <option value="veteran">Veteran</option>
+          <option value="medical">Medical / Support</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label">AVATAR</label>
+        <div class="avatar-grid" id="av-grid">
+          <div class="av-opt sel" data-av="🪖">🪖</div>
+          <div class="av-opt" data-av="👮">👮</div>
+          <div class="av-opt" data-av="🏅">🏅</div>
+          <div class="av-opt" data-av="⭐">⭐</div>
+          <div class="av-opt" data-av="👨‍✈️">👨‍✈️</div>
+          <div class="av-opt" data-av="👩‍✈️">👩‍✈️</div>
+          <div class="av-opt" data-av="🛡️">🛡️</div>
+          <div class="av-opt" data-av="👨‍👩‍👧">👨‍👩‍👧</div>
+          <div class="av-opt" data-av="🏥">🏥</div>
+          <div class="av-opt" data-av="🎖️">🎖️</div>
+        </div>
+      </div>
+      <button class="btn-primary" id="reg-btn" onclick="doRegister()">REQUEST ACCESS</button>
+      <div class="status-msg" id="reg-status"></div>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div id="form-login" style="display:none">
+      <div class="field">
+        <label class="field-label">FULL NAME / RANK</label>
+        <input class="field-input" id="login-name" placeholder="Your registered name" maxlength="32" autocomplete="off" autocorrect="off">
+      </div>
+      <div class="field">
+        <label class="field-label">PASSWORD</label>
+        <input class="field-input" id="login-pass" type="password" placeholder="Your password">
+      </div>
+      <button class="btn-primary" id="login-btn" onclick="doLogin()">ENTER SECURE CHANNEL</button>
+      <div class="status-msg" id="login-status"></div>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:0 20px 24px;font-size:10px;color:var(--muted);font-family:'Courier New',monospace;letter-spacing:1px">
+    🔒 END-TO-END ENCRYPTED · HQ VERIFIED · INDIA HOSTED
+  </div>
+</div>
+
+<!-- ══ PENDING SCREEN ══ -->
+<div id="pending-screen" class="screen">
+  <div class="pending-icon">🔐</div>
+  <div class="pending-title">Awaiting HQ Approval</div>
+  <div class="pending-sub">
+    Your request has been submitted to the HQ Admin. You will be connected automatically once approved.
+    <span class="dots"><span></span><span></span><span></span></span>
+  </div>
+  <div class="pending-id" id="pending-ref">REF: —</div>
+  <div style="margin-top:24px;text-align:center">
+    <button onclick="goBack()" style="background:none;border:1px solid var(--border);color:var(--muted);padding:10px 20px;border-radius:8px;font-size:12px;cursor:pointer;letter-spacing:1px">← BACK</button>
+  </div>
+</div>
+
+<!-- ══ CHAT SCREEN ══ -->
+<div id="chat-screen" class="screen">
+  <div class="chat-bar">
+    <div class="cbar-av" id="my-av">🪖</div>
+    <div>
+      <div class="cbar-name">SecureComm · Alpha Ch.</div>
+      <div class="cbar-sub">🔒 E2E ENCRYPTED · VPN</div>
+    </div>
+    <div class="cbar-right">
+      <div class="online-pill" id="online-pill">1 online</div>
+    </div>
+  </div>
+  <div class="conn-bar" id="conn-bar"></div>
+  <div class="messages" id="messages"></div>
+  <div class="typing-bar" id="typing-bar"></div>
+  <div class="input-area">
+    <textarea class="msg-input" id="msg-input" placeholder="Type message…" rows="1" maxlength="2000"></textarea>
+    <button class="send-btn" id="send-btn" disabled onclick="sendMsg()">↑</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const WS_URL = `ws://${location.host}`;
+let ws = null;
+let myId = null, myName = '', myAvatar = '🪖', myRole = '';
+let selAv = '🪖';
+let typingTimer = null, isTyping = false;
+let reconnectTimer = null;
+let pendingReqId = null;
+let savedName = '', savedPass = '';
+const renderedIds = new Set();
+const typingUsers = new Map();
+
+// ── Avatar picker ──
+document.querySelectorAll('.av-opt').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.av-opt').forEach(e => e.classList.remove('sel'));
+    el.classList.add('sel');
+    selAv = el.dataset.av;
+  });
+});
+
+// ── Tab switch ──
+function switchTab(t) {
+  document.getElementById('form-reg').style.display   = t === 'reg'   ? 'block' : 'none';
+  document.getElementById('form-login').style.display = t === 'login' ? 'block' : 'none';
+  document.getElementById('tab-reg').classList.toggle('active', t === 'reg');
+  document.getElementById('tab-login').classList.toggle('active', t === 'login');
+}
+
+// ── Show screen ──
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function goBack() {
+  if (ws) { ws.close(); ws = null; }
+  show('auth-screen');
+}
+
+// ── WS connect ──
+function connect(onOpen) {
+  if (ws) { try { ws.close(); } catch{} }
+  ws = new WebSocket(WS_URL);
+  ws.onopen  = onOpen;
+  ws.onmessage = e => { try { handle(JSON.parse(e.data)); } catch{} };
+  ws.onclose = () => {
+    document.getElementById('send-btn').disabled = true;
+    setConnBar('err', '✕ Connection lost — reconnecting…');
+    reconnectTimer = setTimeout(() => { if (myId) reconnectAsUser(); }, 3000);
+  };
+  ws.onerror = () => setConnBar('err', '✕ Connection error');
+}
+
+function reconnectAsUser() {
+  connect(() => {
+    clearConnBar();
+    ws.send(JSON.stringify({ type: 'login', name: savedName, password: savedPass }));
+  });
+}
+
+// ── REGISTER ──
+function doRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const pass = document.getElementById('reg-pass').value;
+  const role = document.getElementById('reg-role').value;
+  if (!name) { setStatus('reg', 'err', 'Enter your name.'); return; }
+  if (pass.length < 4) { setStatus('reg', 'err', 'Password min 4 characters.'); return; }
+
+  savedName = name; savedPass = pass;
+  setStatus('reg', 'info', 'Connecting to server…');
+  document.getElementById('reg-btn').disabled = true;
+
+  connect(() => {
+    ws.send(JSON.stringify({ type: 'register', name, password: pass, role, avatar: selAv }));
+  });
+}
+
+// ── LOGIN ──
+function doLogin() {
+  const name = document.getElementById('login-name').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if (!name) { setStatus('login', 'err', 'Enter your name.'); return; }
+
+  savedName = name; savedPass = pass;
+  setStatus('login', 'info', 'Connecting…');
+  document.getElementById('login-btn').disabled = true;
+
+  connect(() => {
+    ws.send(JSON.stringify({ type: 'login', name, password: pass }));
+  });
+}
+
+// ── HANDLE SERVER MESSAGES ──
+function handle(msg) {
+  switch (msg.type) {
+
+    case 'register_pending':
+      pendingReqId = msg.reqId;
+      document.getElementById('pending-ref').textContent = 'REF: ' + msg.reqId.toUpperCase();
+      setStatus('reg', 'info', 'Sent! Awaiting HQ…');
+      show('pending-screen');
+      break;
+
+    case 'register_error':
+      setStatus('reg', 'err', msg.message);
+      document.getElementById('reg-btn').disabled = false;
+      break;
+
+    case 'approved':
+      // Auto-login immediately after approval
+      myId = msg.userId; myName = msg.name;
+      toast('✓ Access granted! Joining…');
+      // re-send login to get full welcome+history
+      setTimeout(() => {
+        ws.send(JSON.stringify({ type: 'login', name: savedName, password: savedPass }));
+      }, 300);
+      break;
+
+    case 'rejected':
+      show('auth-screen');
+      document.getElementById('reg-btn').disabled = false;
+      setStatus('reg', 'err', '✕ Request denied by HQ.');
+      toast('Access denied by HQ');
+      break;
+
+    case 'welcome':
+      myId = msg.userId; myName = msg.name; myRole = msg.role; myAvatar = msg.avatar;
+      document.getElementById('my-av').textContent = myAvatar;
+      clearConnBar();
+      document.getElementById('send-btn').disabled = false;
+      updateOnline(msg.users);
+      msg.history.forEach(m => renderMsg(m));
+      scrollBottom();
+      show('chat-screen');
+      document.getElementById('login-btn').disabled = false;
+      document.getElementById('reg-btn').disabled = false;
+      setTimeout(() => document.getElementById('msg-input').focus(), 400);
+      break;
+
+    case 'login_error':
+      setStatus('login', 'err', msg.message);
+      document.getElementById('login-btn').disabled = false;
+      break;
+
+    case 'message':
+      renderMsg(msg);
+      scrollBottom();
+      break;
+
+    case 'user_joined':
+      updateOnline(msg.users);
+      addSys(`${msg.user.avatar} ${msg.user.name} joined`);
+      scrollBottom();
+      break;
+
+    case 'user_left':
+      updateOnline(msg.users);
+      scrollBottom();
+      break;
+
+    case 'typing':
+      if (msg.user.userId === myId) break;
+      if (msg.isTyping) typingUsers.set(msg.user.userId, msg.user.name);
+      else typingUsers.delete(msg.user.userId);
+      renderTyping();
+      break;
+  }
+}
+
+// ── RENDER ──
+function renderMsg(msg) {
+  if (renderedIds.has(msg.id)) return;
+  renderedIds.add(msg.id);
+  const isMe = msg.from.userId === myId;
+  const grp = document.createElement('div');
+  grp.className = 'msg-grp ' + (isMe ? 'mine' : 'theirs');
+
+  if (!isMe) {
+    const s = document.createElement('div');
+    s.className = 'msg-sender';
+    s.innerHTML = `<span>${msg.from.avatar}</span>${esc(msg.from.name)}`;
+    grp.appendChild(s);
+  }
+  const row = document.createElement('div');
+  row.className = 'bubble-row';
+  const b = document.createElement('div');
+  b.className = 'bubble'; b.textContent = msg.text;
+  row.appendChild(b); grp.appendChild(row);
+
+  const t = document.createElement('div');
+  t.className = 'msg-time';
+  t.textContent = new Date(msg.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + (isMe ? ' ✓✓' : '');
+  grp.appendChild(t);
+  document.getElementById('messages').appendChild(grp);
+}
+
+function addSys(text) {
+  const d = document.createElement('div');
+  d.className = 'sys-msg'; d.textContent = text;
+  document.getElementById('messages').appendChild(d);
+}
+
+function renderTyping() {
+  const bar = document.getElementById('typing-bar');
+  if (!typingUsers.size) { bar.innerHTML = ''; return; }
+  const names = [...typingUsers.values()].join(', ');
+  bar.innerHTML = `${esc(names)} is typing <span class="typing-dots"><span></span><span></span><span></span></span>`;
+}
+
+// ── SEND ──
+function sendMsg() {
+  const inp = document.getElementById('msg-input');
+  const text = inp.value.trim();
+  if (!text || !ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ type: 'message', text }));
+  inp.value = ''; inp.style.height = 'auto';
+  stopTyping();
+}
+
+const inp = document.getElementById('msg-input');
+inp.addEventListener('input', () => {
+  inp.style.height = 'auto';
+  inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+  if (inp.value.trim() && ws && ws.readyState === 1) {
+    if (!isTyping) { isTyping = true; ws.send(JSON.stringify({ type:'typing', isTyping:true })); }
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(stopTyping, 1800);
+  } else stopTyping();
+});
+inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); } });
+
+function stopTyping() {
+  if (isTyping && ws && ws.readyState === 1) ws.send(JSON.stringify({ type:'typing', isTyping:false }));
+  isTyping = false; clearTimeout(typingTimer);
+}
+
+// ── UTILS ──
+function updateOnline(users) {
+  const n = users.length;
+  document.getElementById('online-pill').textContent = n + (n===1?' online':' online');
+}
+function scrollBottom() {
+  const el = document.getElementById('messages');
+  setTimeout(() => el.scrollTop = el.scrollHeight, 50);
+}
+function setConnBar(type, text) {
+  const b = document.getElementById('conn-bar');
+  b.className = 'conn-bar ' + type; b.textContent = text;
+}
+function clearConnBar() { document.getElementById('conn-bar').className = 'conn-bar'; }
+function setStatus(form, type, text) {
+  const el = document.getElementById(form+'-status');
+  el.className = 'status-msg ' + type; el.textContent = text;
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Default to register tab
+switchTab('reg');
+</script>
+</body>
+</html>
