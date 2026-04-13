@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express    = require('express');
 const http       = require('http');
 const WebSocket  = require('ws');
@@ -9,6 +9,7 @@ const QRCode     = require('qrcode');
 const bcrypt     = require('bcrypt');
 const jwt        = require('jsonwebtoken');
 const db         = require('./db');
+const wg         = require('./wg');
 
 const SALT_ROUNDS  = 10;
 const JWT_SECRET   = process.env.JWT_SECRET   || 'change_me_in_production';
@@ -21,11 +22,14 @@ app.use(express.json());
 const server = http.createServer(app);
 
 // ── WebSocket server with device key enforcement ──────────────────────────────
+// Mobile apps send key via header (IOWebSocketChannel)
+// Browser dashboard sends key via query param (browsers can't set WS headers)
 const wss = new WebSocket.Server({
   server,
   verifyClient: ({ req }, done) => {
-    const key = req.headers['x-device-key'];
-    if (key !== DEVICE_KEY) {
+    const headerKey = req.headers['x-device-key'];
+    const urlKey    = new URL(req.url, 'http://localhost').searchParams.get('dk');
+    if (headerKey !== DEVICE_KEY && urlKey !== DEVICE_KEY) {
       done(false, 403, 'Unauthorized device');
     } else {
       done(true);
@@ -206,14 +210,34 @@ wss.on('connection', (ws, req) => {
       if (!req) { send(ws, { type: 'error', message: 'Request expired or already handled.' }); return; }
 
       const userId = 'usr_' + crypto.randomBytes(4).toString('hex');
-      await db.createUser(userId, req.name, req.role, req.avatar, req.passwordHash);
+
+      // Provision WireGuard config for the new user
+      let wgConfig = null;
+      let wgClientId = null;
+      try {
+        const wgResult = await wg.createClient(`${req.name}_${userId.slice(-4)}`);
+        wgConfig   = wgResult.config;
+        wgClientId = wgResult.clientId;
+        console.log(`[${ts()}] [WG]   Created WireGuard client for ${req.name}`);
+      } catch (e) {
+        console.error(`[${ts()}] [WG]   Failed to create WireGuard client: ${e.message}`);
+      }
+
+      await db.createUser(userId, req.name, req.role, req.avatar, req.passwordHash, wgClientId);
       await db.removePendingRequest(msg.reqId);
       pendingRequests.delete(msg.reqId);
       console.log(`[${ts()}] [OK]   Approved: ${req.name}`);
 
       const token = issueToken(userId, req.name, req.role, req.avatar);
       if (req.ws?.readyState === WebSocket.OPEN) {
-        send(req.ws, { type: 'approved', userId, name: req.name, token, message: 'Access granted!' });
+        send(req.ws, {
+          type: 'approved',
+          userId,
+          name: req.name,
+          token,
+          wgConfig,   // WireGuard .conf file contents — app activates this as a VPN profile
+          message: 'Access granted!',
+        });
       }
 
       await db.logAudit('approved', client.name, req.name);
@@ -434,7 +458,15 @@ wss.on('connection', (ws, req) => {
 });
 
 // ── HTTP ──────────────────────────────────────────────────────────────────────
+// Serve legacy admin panel
 app.use(express.static(path.join(__dirname, 'public')));
+// Serve React admin dashboard from /hq
+app.use('/hq', express.static(path.join(__dirname, '../admin-dashboard/dist')));
+app.get('/hq/{*path}', (_, res) => res.sendFile(path.join(__dirname, '../admin-dashboard/dist/index.html')));
+
+// Serve mobile web app from /app
+app.use('/app', express.static(path.join(__dirname, '../mobile-web/dist')));
+app.get('/app/{*path}', (_, res) => res.sendFile(path.join(__dirname, '../mobile-web/dist/index.html')));
 
 app.get('/health', (_, res) => res.json({ status: 'ok', uptime: Math.floor(process.uptime()) }));
 

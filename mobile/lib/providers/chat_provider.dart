@@ -212,6 +212,11 @@ class ChatProvider extends ChangeNotifier {
         userName = msg['name']   as String?;
         token    = msg['token']  as String?;
         if (token != null) _storage.write(key: 'jwt', value: token!);
+        // Store WireGuard config if provided
+        final wgConf = msg['wgConfig'] as String?;
+        if (wgConf != null && wgConf.isNotEmpty) {
+          _storage.write(key: 'wg_config', value: wgConf);
+        }
         notifyListeners();
         navigatorKey.currentState?.pushReplacementNamed('/groups');
 

@@ -1,7 +1,30 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const { Pool } = require('pg');
 
-const pool = new Pool({ connectionString: process.env.DB_URL });
+// Parse DB_URL into explicit params to avoid pg SASL password-string issues
+function buildPoolConfig() {
+  const url = process.env.DB_URL;
+  if (url) {
+    const u = new URL(url);
+    return {
+      host:     u.hostname,
+      port:     parseInt(u.port || '5432', 10),
+      database: u.pathname.replace(/^\//, ''),
+      user:     u.username,
+      password: u.password,
+    };
+  }
+  // fallback to individual env vars
+  return {
+    host:     process.env.DB_HOST     || 'localhost',
+    port:     parseInt(process.env.DB_PORT || '5432', 10),
+    database: process.env.DB_NAME     || 'securecomm',
+    user:     process.env.DB_USER     || 'postgres',
+    password: process.env.DB_PASSWORD || '',
+  };
+}
+
+const pool = new Pool(buildPoolConfig());
 
 async function init() {
   const client = await pool.connect();
@@ -13,6 +36,7 @@ async function init() {
         role          TEXT NOT NULL,
         avatar        TEXT NOT NULL,
         password_hash TEXT NOT NULL,
+        wg_client_id  TEXT,
         created_at    TIMESTAMPTZ DEFAULT NOW()
       );
 
@@ -75,10 +99,10 @@ async function init() {
 
 // ── Users ────────────────────────────────────────────────────────────────────
 
-async function createUser(userId, name, role, avatar, passwordHash) {
+async function createUser(userId, name, role, avatar, passwordHash, wgClientId = null) {
   const res = await pool.query(
-    'INSERT INTO users (user_id, name, role, avatar, password_hash) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-    [userId, name, role, avatar, passwordHash]
+    'INSERT INTO users (user_id, name, role, avatar, password_hash, wg_client_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [userId, name, role, avatar, passwordHash, wgClientId]
   );
   return res.rows[0];
 }

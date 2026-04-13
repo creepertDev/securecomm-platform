@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'constants.dart';
@@ -11,12 +12,23 @@ import 'screens/chat_screen.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => ChatProvider(navigatorKey),
-      child: const SecureCommApp(),
-    ),
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+  };
+
+  runZonedGuarded(
+    () {
+      runApp(
+        ChangeNotifierProvider(
+          create: (_) => ChatProvider(navigatorKey),
+          child: const SecureCommApp(),
+        ),
+      );
+    },
+    (error, stack) => debugPrint('FATAL: $error\n$stack'),
   );
 }
 

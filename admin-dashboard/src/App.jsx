@@ -3,6 +3,7 @@ import { AdminProvider, useAdmin } from './context/AdminContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Pending from './pages/Pending'
+import Groups from './pages/Groups'
 import Members from './pages/Members'
 import AuditLog from './pages/AuditLog'
 import Sidebar from './components/Sidebar'
@@ -26,6 +27,7 @@ function AppRoutes() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/pending" element={<Pending />} />
+          <Route path="/groups"  element={<Groups />} />
           <Route path="/members" element={<Members />} />
           <Route path="/audit" element={<AuditLog />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -38,7 +40,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <AdminProvider>
-      <BrowserRouter>
+      <BrowserRouter basename="/hq">
         <AppRoutes />
       </BrowserRouter>
     </AdminProvider>

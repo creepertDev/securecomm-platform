@@ -2,9 +2,10 @@ import { NavLink } from 'react-router-dom'
 import { useAdmin } from '../context/AdminContext'
 
 const NAV = [
-  { to: '/dashboard', icon: '▦', label: 'Dashboard' },
-  { to: '/pending',   icon: '⏳', label: 'Pending' },
-  { to: '/members',   icon: '👥', label: 'Members' },
+  { to: '/dashboard', icon: '▦',  label: 'Dashboard' },
+  { to: '/pending',   icon: '⏳', label: 'Pending'   },
+  { to: '/groups',    icon: '🔒', label: 'Channels'  },
+  { to: '/members',   icon: '👥', label: 'Members'   },
   { to: '/audit',     icon: '📋', label: 'Audit Log' },
 ]
 
