@@ -73,7 +73,8 @@
       "Bash(flutter clean:*)",
       "Bash(echo \"PID: $!\")",
       "Bash(xcrun devicectl:*)",
-      "Bash(xcrun simctl:*)"
+      "Bash(xcrun simctl:*)",
+      "Bash(python3 -c \" import sys, json data = sys.stdin.read\\(\\) lines = data.split\\('\\\\n'\\) for line in lines[-100:]: try: obj = json.loads\\(line\\) if 'screenshot' in str\\(obj\\).lower\\(\\) or 'secure_screen' in str\\(obj\\).lower\\(\\) or 'flutter_windowmanager' in str\\(obj\\).lower\\(\\): print\\(line[:500]\\) except: pass \")"
     ]
   }
 }
