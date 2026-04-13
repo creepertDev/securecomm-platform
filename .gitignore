@@ -12,4 +12,4 @@ build/
 # OS
 .DS_Store
 
-.ecosystem.config.cjs
+ecosystem.config.cjs
