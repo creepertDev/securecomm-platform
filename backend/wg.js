@@ -61,19 +61,36 @@ async function _getSession() {
  */
 async function createClient(name) {
   const session = await _getSession();
-  const res     = await _request('POST', '/api/wireguard/client', { name }, session);
-  if (res.status !== 200) throw new Error(`wg-easy create failed: ${res.status}`);
-  const clientId = res.body.id;
+
+  // Snapshot existing client IDs before creation
+  const before = await _request('GET', '/api/wireguard/client', null, session);
+  const beforeIds = new Set((before.body || []).map(c => c.id));
+
+  const res = await _request('POST', '/api/wireguard/client', { name }, session);
+  if (res.status !== 200 && res.status !== 201) throw new Error(`wg-easy create failed: ${res.status}`);
+
+  // Find the newly created client (not in before set)
+  const after = await _request('GET', '/api/wireguard/client', null, session);
+  const newClient = (after.body || []).find(c => !beforeIds.has(c.id));
+  if (!newClient) throw new Error('wg-easy: could not locate new client after creation');
+  const clientId = newClient.id;
 
   // Fetch the config file
   const confRes = await _request('GET', `/api/wireguard/client/${clientId}/configuration`, null, session);
   if (confRes.status !== 200) throw new Error('wg-easy config fetch failed');
-  const config = confRes.body; // raw .conf string
+  const config = confRes.body;
 
-  // Also get QR code SVG URL (useful for future dashboard display)
-  const qrUrl = `http://${WG_HOST}:${WG_PORT}/api/wireguard/client/${clientId}/qrcode.svg`;
+  return { clientId, config };
+}
 
-  return { clientId, config, qrUrl };
+/**
+ * Fetch the config for an existing client.
+ */
+async function getClientConfig(clientId) {
+  const session = await _getSession();
+  const confRes = await _request('GET', `/api/wireguard/client/${clientId}/configuration`, null, session);
+  if (confRes.status !== 200) throw new Error('wg-easy config fetch failed');
+  return confRes.body;
 }
 
 /**
@@ -94,4 +111,4 @@ async function listClients() {
   return res.status === 200 ? res.body : [];
 }
 
-module.exports = { createClient, deleteClient, listClients };
+module.exports = { createClient, getClientConfig, deleteClient, listClients };

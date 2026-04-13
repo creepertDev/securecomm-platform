@@ -157,12 +157,21 @@ wss.on('connection', (ws, req) => {
       console.log(`[${ts()}] [IN]   ${name}`);
 
       const history = await db.getGlobalMessages(50);
+      // Fetch WireGuard config for returning user if they have one
+      let wgConfig = null;
+      if (user.wg_client_id) {
+        try {
+          const confRes = await wg.getClientConfig(user.wg_client_id);
+          wgConfig = confRes;
+        } catch (_) {}
+      }
       send(ws, {
         type: 'welcome',
         userId, name, role, avatar, token,
         history,
         users: onlineUserList(),
         groups: groups.map(g => ({ groupId: g.group_id, name: g.name, description: g.description })),
+        wgConfig,
       });
       broadcastToAll({ type: 'user_joined', user: { userId, name, role, avatar }, users: onlineUserList() }, ws);
       await db.logAudit('user_joined', name);

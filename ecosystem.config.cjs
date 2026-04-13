@@ -24,8 +24,8 @@ module.exports = {
       script: './backend/ddns.js',
       cwd: '/Users/bhavesh/securecomm-platform',
       env: {
-        CF_API_TOKEN: '',
-        CF_ZONE_ID: '',
+        CF_API_TOKEN: 'cfut_7socAoPAlDUqGkKjaqlt0qMEywFPuxLOOal7mnXtc1aa41ba',
+        CF_ZONE_ID:   '2da3a60a428f26e026bc23d707ccf844',
       },
       watch: false,
       restart_delay: 5000,

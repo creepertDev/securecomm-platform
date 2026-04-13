@@ -5,7 +5,7 @@
  *
  * Run via PM2 alongside the backend.
  */
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const https  = require('https');
 const http   = require('http');
 const { execSync } = require('child_process');

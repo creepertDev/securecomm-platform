@@ -4,27 +4,25 @@ import SplashScreen   from './screens/SplashScreen.jsx';
 import LoginScreen    from './screens/LoginScreen.jsx';
 import RegisterScreen from './screens/RegisterScreen.jsx';
 import PendingScreen  from './screens/PendingScreen.jsx';
+import VpnScreen      from './screens/VpnScreen.jsx';
 import GroupsScreen   from './screens/GroupsScreen.jsx';
 import ChatScreen     from './screens/ChatScreen.jsx';
+import RejectedScreen from './screens/RejectedScreen.jsx';
 import './index.css';
 
 export default function App() {
   const [screen, setScreen] = useState('splash');
   const [wsStatus, setWsStatus] = useState('disconnected');
 
-  // User state
-  const [user, setUser]     = useState(null); // { userId, name, role, avatar, token }
-  const [reqId, setReqId]   = useState(null);
+  const [user, setUser]       = useState(null);
+  const [reqId, setReqId]     = useState(null);
+  const [wgConfig, setWgConfig] = useState(null);
 
-  // Chat state
   const [groups, setGroups]       = useState([]);
   const [globalMsgs, setGlobal]   = useState([]);
-  const [groupMsgs, setGroupMsgs] = useState({}); // groupId → []
+  const [groupMsgs, setGroupMsgs] = useState({});
   const [onlineUsers, setOnline]  = useState([]);
-  const [activeGroup, setActive]  = useState(null); // { groupId, groupName }
-
-  const userRef = useRef(user);
-  useEffect(() => { userRef.current = user; }, [user]);
+  const [activeGroup, setActive]  = useState(null);
 
   const handleMessage = useCallback((msg) => {
     switch (msg.type) {
@@ -40,12 +38,16 @@ export default function App() {
       case 'approved':
         setUser({ userId: msg.userId, name: msg.name, role: msg.role, avatar: msg.avatar, token: msg.token });
         if (msg.token) localStorage.setItem('sc_token', msg.token);
-        setScreen('groups');
+        if (msg.wgConfig) {
+          setWgConfig(msg.wgConfig);
+          setScreen('vpn'); // First login — show VPN setup
+        } else {
+          setScreen('groups');
+        }
         break;
 
       case 'rejected':
-        alert(msg.message || 'Access denied by HQ.');
-        setScreen('login');
+        setScreen('rejected');
         break;
 
       case 'login_error':
@@ -58,7 +60,8 @@ export default function App() {
         setGlobal((msg.history || []).map(normalizeMsg));
         setOnline(msg.users || []);
         setGroups(msg.groups || []);
-        setScreen('groups');
+        if (msg.wgConfig) setWgConfig(msg.wgConfig);
+        setScreen('groups'); // Returning users go straight to groups
         break;
 
       case 'message': {
@@ -78,7 +81,9 @@ export default function App() {
         break;
 
       case 'added_to_group':
-        if (msg.group) setGroups(prev => prev.find(g => g.groupId === msg.group.groupId) ? prev : [...prev, msg.group]);
+        if (msg.group) setGroups(prev =>
+          prev.find(g => g.groupId === msg.group.groupId) ? prev : [...prev, msg.group]
+        );
         break;
 
       case 'group_removed':
@@ -90,15 +95,9 @@ export default function App() {
       case 'user_left':
         setOnline(msg.users || []);
         break;
-
-      case 'group_created':
-      case 'group_updated':
-        // handled server-side; groups refreshed via welcome/added_to_group
-        break;
     }
   }, []);
 
-  // Connect on mount
   useEffect(() => {
     setTimeout(() => {
       connect(handleMessage, setWsStatus);
@@ -115,12 +114,8 @@ export default function App() {
 
   const doLogout = () => {
     localStorage.removeItem('sc_token');
-    setUser(null);
-    setGroups([]);
-    setGlobal([]);
-    setGroupMsgs({});
-    setOnline([]);
-    setActive(null);
+    setUser(null); setGroups([]); setGlobal([]);
+    setGroupMsgs({}); setOnline([]); setActive(null); setWgConfig(null);
     setScreen('login');
   };
 
@@ -130,28 +125,24 @@ export default function App() {
     setScreen('chat');
   };
 
-  if (screen === 'splash') return <SplashScreen />;
-  if (screen === 'login')  return <LoginScreen  onLogin={doLogin} onGoRegister={() => setScreen('register')} wsStatus={wsStatus} />;
-  if (screen === 'register') return <RegisterScreen onRegister={doRegister} onBack={() => setScreen('login')} />;
-  if (screen === 'pending')  return <PendingScreen reqId={reqId} />;
-  if (screen === 'groups')   return (
+  if (screen === 'rejected')  return <RejectedScreen onBack={() => setScreen('login')} />;
+  if (screen === 'splash')    return <SplashScreen />;
+  if (screen === 'login')     return <LoginScreen onLogin={doLogin} onGoRegister={() => setScreen('register')} wsStatus={wsStatus} />;
+  if (screen === 'register')  return <RegisterScreen onRegister={doRegister} onBack={() => setScreen('login')} />;
+  if (screen === 'pending')   return <PendingScreen reqId={reqId} />;
+  if (screen === 'vpn')       return <VpnScreen config={wgConfig} onContinue={() => setScreen('groups')} />;
+  if (screen === 'groups')    return (
     <GroupsScreen
-      user={user}
-      groups={groups}
-      onlineUsers={onlineUsers}
-      wsStatus={wsStatus}
-      onOpenChat={openChat}
-      onLogout={doLogout}
+      user={user} groups={groups} onlineUsers={onlineUsers} wsStatus={wsStatus}
+      onOpenChat={openChat} onLogout={doLogout}
+      onShowVpn={wgConfig ? () => setScreen('vpn') : null}
     />
   );
   if (screen === 'chat') return (
     <ChatScreen
-      user={user}
-      group={activeGroup}
+      user={user} group={activeGroup}
       messages={activeGroup ? (groupMsgs[activeGroup.groupId] || []) : globalMsgs}
-      onSend={doSend}
-      onTyping={doTyping}
-      onBack={() => setScreen('groups')}
+      onSend={doSend} onTyping={doTyping} onBack={() => setScreen('groups')}
     />
   );
   return null;
