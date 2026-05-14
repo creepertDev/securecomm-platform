@@ -98,7 +98,7 @@ async function getClientConfig(clientId) {
  * WireGuard peers re-handshake every ~180s when active.
  * Returns true if the client is considered "on VPN".
  */
-async function isClientConnected(clientId, maxAgeSeconds = 240) {
+async function isClientConnected(clientId, maxAgeSeconds = 185) {
   const session = await _getSession();
   const res     = await _request('GET', '/api/wireguard/client', null, session);
   if (res.status !== 200) return false;

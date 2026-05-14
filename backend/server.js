@@ -57,6 +57,8 @@ const wss = new WebSocket.Server({
 // ── In-memory state ───────────────────────────────────────────────────────────
 const pendingRequests = new Map();  // reqId → { reqId, name, role, avatar, passwordHash, ts, ws }
 const activeClients   = new Map();  // ws    → { userId, name, role, avatar }
+const vpnWatchers     = new Map();  // ws    → intervalId  (periodic VPN keep-alive check)
+const createClientLocks = new Set(); // userId → lock (prevents duplicate WG client creation)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getLocalIP() {
@@ -186,14 +188,20 @@ wss.on('connection', (ws, req) => {
             wgConfig = await wg.getClientConfig(user.wg_client_id);
           } catch (_) {
             // Client no longer exists on wg-easy (e.g. server migration) — create a fresh one
-            try {
-              const label = `${name}_${user.user_id.slice(-4)}`;
-              const { clientId, config } = await wg.createClient(label);
-              await db.pool.query('UPDATE users SET wg_client_id = $1 WHERE user_id = $2', [clientId, user.user_id]);
-              wgConfig = config;
-              console.log(`[${ts()}] [WG]   ${name} — recreated client ${clientId}`);
-            } catch (e) {
-              console.error(`[${ts()}] [WG]   ${name} — failed to recreate client:`, e.message);
+            // Lock per-user to avoid race condition creating duplicate clients
+            if (!createClientLocks.has(user.user_id)) {
+              createClientLocks.add(user.user_id);
+              try {
+                const label = `${name}_${user.user_id.slice(-4)}`;
+                const { clientId, config } = await wg.createClient(label);
+                await db.pool.query('UPDATE users SET wg_client_id = $1 WHERE user_id = $2', [clientId, user.user_id]);
+                wgConfig = config;
+                console.log(`[${ts()}] [WG]   ${name} — recreated client ${clientId}`);
+              } catch (e) {
+                console.error(`[${ts()}] [WG]   ${name} — failed to recreate client:`, e.message);
+              } finally {
+                createClientLocks.delete(user.user_id);
+              }
             }
           }
           send(ws, { type: 'network_required', deviceId, wgConfig, message: 'Connect to the SecureComm VPN to continue.' });
@@ -220,6 +228,24 @@ wss.on('connection', (ws, req) => {
 
       activeClients.set(ws, { userId, name, role, avatar, groups: groupIds });
       console.log(`[${ts()}] [IN]   ${name}`);
+
+      // ── Periodic VPN watcher — kick user if they drop off VPN mid-session ──
+      if (user.wg_client_id) {
+        const wgClientId = user.wg_client_id;
+        const watcherId = setInterval(async () => {
+          if (ws.readyState !== WebSocket.OPEN) return clearInterval(watcherId);
+          const stillOn = await wg.isClientConnected(wgClientId).catch(() => false);
+          if (!stillOn) {
+            console.log(`[${ts()}] [VPN]  ${name} — dropped off VPN, kicking`);
+            send(ws, { type: 'network_required', wgConfig: null, message: 'VPN connection lost. Reconnect to continue.' });
+            // Give client 2s to receive the message then close
+            setTimeout(() => { if (ws.readyState === WebSocket.OPEN) ws.close(); }, 2000);
+            clearInterval(watcherId);
+            vpnWatchers.delete(ws);
+          }
+        }, 60_000); // check every 60 seconds
+        vpnWatchers.set(ws, watcherId);
+      }
 
       const history = await db.getGlobalMessages(50);
       // Fetch WireGuard config for returning user if they have one
@@ -550,6 +576,11 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', async () => {
+    // Stop VPN watcher if running
+    if (vpnWatchers.has(ws)) {
+      clearInterval(vpnWatchers.get(ws));
+      vpnWatchers.delete(ws);
+    }
     for (const [id, r] of pendingRequests) {
       if (r.ws === ws) { pendingRequests.delete(id); break; }
     }
