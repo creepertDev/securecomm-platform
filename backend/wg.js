@@ -20,7 +20,7 @@ function _request(method, path, body = null, cookie = null) {
     if (cookie) headers['Cookie']         = cookie;
 
     const req = http.request(
-      { hostname: 'localhost', port: WG_PORT, path, method, headers },
+      { hostname: WG_HOST, port: WG_PORT, path, method, headers },
       res => {
         let buf = '';
         res.on('data', d => buf += d);
@@ -94,6 +94,21 @@ async function getClientConfig(clientId) {
 }
 
 /**
+ * Check whether a WireGuard client has had a handshake in the last N seconds.
+ * WireGuard peers re-handshake every ~180s when active.
+ * Returns true if the client is considered "on VPN".
+ */
+async function isClientConnected(clientId, maxAgeSeconds = 240) {
+  const session = await _getSession();
+  const res     = await _request('GET', '/api/wireguard/client', null, session);
+  if (res.status !== 200) return false;
+  const client  = (res.body || []).find(c => c.id === clientId);
+  if (!client || !client.latestHandshakeAt) return false;
+  const age = (Date.now() - new Date(client.latestHandshakeAt).getTime()) / 1000;
+  return age <= maxAgeSeconds;
+}
+
+/**
  * Delete a WireGuard client by ID.
  */
 async function deleteClient(clientId) {
@@ -111,4 +126,4 @@ async function listClients() {
   return res.status === 200 ? res.body : [];
 }
 
-module.exports = { createClient, getClientConfig, deleteClient, listClients };
+module.exports = { createClient, getClientConfig, isClientConnected, deleteClient, listClients };

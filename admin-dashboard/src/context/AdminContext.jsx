@@ -135,6 +135,7 @@ export function AdminProvider({ children }) {
   const deleteGroup     = useCallback((groupId)  => send({ type: 'delete_group', groupId }), [send])
   const addMember       = useCallback((groupId, userId) => send({ type: 'add_member', groupId, userId }), [send])
   const removeMember    = useCallback((groupId, userId) => send({ type: 'remove_member', groupId, userId }), [send])
+  const generateWg      = useCallback((userId)          => send({ type: 'generate_wg', userId }), [send])
 
   const logout = useCallback(() => {
     wsRef.current?.close()
@@ -154,7 +155,7 @@ export function AdminProvider({ children }) {
       messageCount, uptime, auditLog,
       groups, allUsers,
       adminLogin, approveRequest, rejectRequest,
-      createGroup, deleteGroup, addMember, removeMember,
+      createGroup, deleteGroup, addMember, removeMember, generateWg,
       logout,
     }}>
       {children}

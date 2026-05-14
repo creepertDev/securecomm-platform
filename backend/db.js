@@ -37,6 +37,7 @@ async function init() {
         avatar        TEXT NOT NULL,
         password_hash TEXT NOT NULL,
         wg_client_id  TEXT,
+        device_id     TEXT,
         created_at    TIMESTAMPTZ DEFAULT NOW()
       );
 
@@ -81,14 +82,27 @@ async function init() {
         role          TEXT NOT NULL,
         avatar        TEXT NOT NULL,
         password_hash TEXT NOT NULL,
+        device_id     TEXT,
         created_at    TIMESTAMPTZ DEFAULT NOW()
       );
     `);
 
-    // Add group_id column to messages if upgrading from old schema
+    // Migrations for schema upgrades
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE messages ADD COLUMN IF NOT EXISTS group_id TEXT REFERENCES groups(group_id) ON DELETE CASCADE;
+      EXCEPTION WHEN others THEN NULL;
+      END $$;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS device_id TEXT;
+      EXCEPTION WHEN others THEN NULL;
+      END $$;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE pending_requests ADD COLUMN IF NOT EXISTS device_id TEXT;
       EXCEPTION WHEN others THEN NULL;
       END $$;
     `);
@@ -99,12 +113,16 @@ async function init() {
 
 // ── Users ────────────────────────────────────────────────────────────────────
 
-async function createUser(userId, name, role, avatar, passwordHash, wgClientId = null) {
+async function createUser(userId, name, role, avatar, passwordHash, wgClientId = null, deviceId = null) {
   const res = await pool.query(
-    'INSERT INTO users (user_id, name, role, avatar, password_hash, wg_client_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-    [userId, name, role, avatar, passwordHash, wgClientId]
+    'INSERT INTO users (user_id, name, role, avatar, password_hash, wg_client_id, device_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+    [userId, name, role, avatar, passwordHash, wgClientId, deviceId]
   );
   return res.rows[0];
+}
+
+async function bindDeviceId(userId, deviceId) {
+  await pool.query('UPDATE users SET device_id = $1 WHERE user_id = $2', [deviceId, userId]);
 }
 
 async function findUserByName(name) {
@@ -242,11 +260,11 @@ async function countMessages() {
 
 // ── Pending requests ─────────────────────────────────────────────────────────
 
-async function addPendingRequest(reqId, name, role, avatar, passwordHash) {
+async function addPendingRequest(reqId, name, role, avatar, passwordHash, deviceId = null) {
   await pool.query(
-    `INSERT INTO pending_requests (req_id, name, role, avatar, password_hash)
-     VALUES ($1, $2, $3, $4, $5) ON CONFLICT (req_id) DO NOTHING`,
-    [reqId, name, role, avatar, passwordHash]
+    `INSERT INTO pending_requests (req_id, name, role, avatar, password_hash, device_id)
+     VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (req_id) DO NOTHING`,
+    [reqId, name, role, avatar, passwordHash, deviceId]
   );
 }
 
@@ -274,7 +292,7 @@ async function getAuditLog(limit = 100) {
 module.exports = {
   pool, init,
   // users
-  createUser, findUserByName, findUserById, getAllUsers, countUsers,
+  createUser, bindDeviceId, findUserByName, findUserById, getAllUsers, countUsers,
   // groups
   createGroup, getGroup, getAllGroups, deleteGroup,
   addGroupMember, removeGroupMember, getGroupMembers, getUserGroups, isGroupMember,

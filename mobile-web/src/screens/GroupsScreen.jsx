@@ -39,9 +39,9 @@ export default function GroupsScreen({ user, groups, onlineUsers, wsStatus, onOp
           <div
             className={s.userId}
             onClick={() => { navigator.clipboard?.writeText(uid); }}
-            title="Tap to copy ID"
+            title="Tap to copy your unique ID"
           >
-            ID: {uid.slice(0, 16)}… <span style={{fontSize:10}}>⎘</span>
+            UID · {uid.toUpperCase()} <span style={{fontSize:9, opacity:0.6}}>⎘</span>
           </div>
         </div>
         <div style={{textAlign:'center'}}>

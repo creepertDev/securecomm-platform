@@ -1,10 +1,22 @@
 import { WS_URL, DEVICE_KEY } from './constants.js';
 
 let ws = null;
-let listeners = [];
 let reconnectTimer = null;
 
-export function getWs() { return ws; }
+// ── Persistent device ID ──────────────────────────────────────────────────────
+// Generated once on first app load, stored in localStorage forever.
+// Bound to the user's account on first successful login.
+function getDeviceId() {
+  let id = localStorage.getItem('sc_device_id');
+  if (!id) {
+    id = 'sc-' + Array.from(crypto.getRandomValues(new Uint8Array(16)))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem('sc_device_id', id);
+  }
+  return id;
+}
+
+export const deviceId = getDeviceId();
 
 export function connect(onMessage, onStatus) {
   if (ws && ws.readyState === WebSocket.OPEN) return;
@@ -23,8 +35,11 @@ export function connect(onMessage, onStatus) {
   };
 }
 
+// Auto-injects deviceId into every outgoing message
 export function send(obj) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ ...obj, deviceId }));
+  }
 }
 
 export function disconnect() {

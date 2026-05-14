@@ -16,6 +16,23 @@ const JWT_SECRET   = process.env.JWT_SECRET   || 'change_me_in_production';
 const HQ_PASSWORD  = process.env.HQ_PASSWORD  || 'hq@admin123';
 const DEVICE_KEY   = process.env.DEVICE_KEY   || 'sc-device-key-change-in-prod';
 const PORT         = process.env.PORT         || 3000;
+// Comma-separated list of allowed client IPs. Leave blank to allow all (dev mode).
+const ALLOWED_IPS  = (process.env.ALLOWED_IPS || '').split(',').map(s => s.trim()).filter(Boolean);
+
+// Extract the real client IP — Cloudflare sets CF-Connecting-IP, proxies use X-Forwarded-For
+function getClientIP(req) {
+  return (
+    req.headers['cf-connecting-ip'] ||
+    (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+    req.socket.remoteAddress ||
+    ''
+  ).replace(/^::ffff:/, ''); // strip IPv4-mapped IPv6 prefix
+}
+
+function isIPAllowed(ip) {
+  if (ALLOWED_IPS.length === 0) return true; // no restriction in dev mode
+  return ALLOWED_IPS.includes(ip);
+}
 
 const app    = express();
 app.use(express.json());
@@ -106,7 +123,8 @@ function timingSafeEqual(a, b) {
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 wss.on('connection', (ws, req) => {
-  console.log(`[${ts()}] [CONN] ${req.socket.remoteAddress}`);
+  const clientIP = getClientIP(req);
+  console.log(`[${ts()}] [CONN] ${clientIP}`);
 
   ws.on('message', async raw => {
     let msg;
@@ -114,10 +132,11 @@ wss.on('connection', (ws, req) => {
 
     // ── REGISTER ─────────────────────────────────────────────────────────────
     if (msg.type === 'register') {
-      const name   = (msg.name || '').slice(0, 32).replace(/[<>]/g, '').trim();
-      const role   = (msg.role || 'personnel').slice(0, 30);
-      const avatar = msg.avatar || '🪖';
-      const pass   = (msg.password || '').slice(0, 64);
+      const name     = (msg.name || '').slice(0, 32).replace(/[<>]/g, '').trim();
+      const role     = (msg.role || 'personnel').slice(0, 30);
+      const avatar   = msg.avatar || '🪖';
+      const pass     = (msg.password || '').slice(0, 64);
+      const deviceId = (msg.deviceId || '').slice(0, 64);
 
       if (!name) { send(ws, { type: 'register_error', message: 'Name is required.' }); return; }
       if (!pass) { send(ws, { type: 'register_error', message: 'Password is required.' }); return; }
@@ -128,9 +147,9 @@ wss.on('connection', (ws, req) => {
       const passwordHash = await bcrypt.hash(pass, SALT_ROUNDS);
       const reqId = crypto.randomBytes(5).toString('hex');
 
-      pendingRequests.set(reqId, { reqId, name, role, avatar, passwordHash, ts: Date.now(), ws });
-      await db.addPendingRequest(reqId, name, role, avatar, passwordHash);
-      console.log(`[${ts()}] [REG]  ${name} (${role}) reqId:${reqId}`);
+      pendingRequests.set(reqId, { reqId, name, role, avatar, passwordHash, deviceId, ts: Date.now(), ws });
+      await db.addPendingRequest(reqId, name, role, avatar, passwordHash, deviceId);
+      console.log(`[${ts()}] [REG]  ${name} (${role}) reqId:${reqId} device:${deviceId.slice(0,8)}`);
 
       send(ws, { type: 'register_pending', reqId, message: 'Request sent to HQ. Awaiting approval…' });
       broadcastToAdmins({ type: 'new_request', request: { reqId, name, role, avatar, ts: Date.now() } });
@@ -139,14 +158,60 @@ wss.on('connection', (ws, req) => {
 
     // ── LOGIN ─────────────────────────────────────────────────────────────────
     if (msg.type === 'login') {
-      const name = (msg.name || '').trim();
-      const pass = msg.password || '';
+      const name     = (msg.name || '').trim();
+      const pass     = msg.password || '';
+      const deviceId = (msg.deviceId || '').slice(0, 64);
 
       const user = await db.findUserByName(name);
       if (!user) { send(ws, { type: 'login_error', message: 'Invalid credentials or not yet approved.' }); return; }
 
       const match = await bcrypt.compare(pass, user.password_hash);
       if (!match) { send(ws, { type: 'login_error', message: 'Invalid credentials or not yet approved.' }); return; }
+
+      // Device ID check — if account has a bound device, enforce it
+      if (user.device_id && deviceId && user.device_id !== deviceId) {
+        send(ws, { type: 'login_error', message: 'Device not recognized. Contact HQ.' });
+        console.log(`[${ts()}] [DENY] ${name} — device mismatch`);
+        return;
+      }
+
+      // VPN check — user must have an active WireGuard handshake (last 240s)
+      // This is more reliable than IP checking on iOS/Cloudflare setups.
+      // Falls back to IP check if ALLOWED_IPS is set and WG check passes too.
+      if (user.wg_client_id) {
+        const onVpn = await wg.isClientConnected(user.wg_client_id).catch(() => false);
+        if (!onVpn) {
+          let wgConfig = null;
+          try {
+            wgConfig = await wg.getClientConfig(user.wg_client_id);
+          } catch (_) {
+            // Client no longer exists on wg-easy (e.g. server migration) — create a fresh one
+            try {
+              const label = `${name}_${user.user_id.slice(-4)}`;
+              const { clientId, config } = await wg.createClient(label);
+              await db.pool.query('UPDATE users SET wg_client_id = $1 WHERE user_id = $2', [clientId, user.user_id]);
+              wgConfig = config;
+              console.log(`[${ts()}] [WG]   ${name} — recreated client ${clientId}`);
+            } catch (e) {
+              console.error(`[${ts()}] [WG]   ${name} — failed to recreate client:`, e.message);
+            }
+          }
+          send(ws, { type: 'network_required', deviceId, wgConfig, message: 'Connect to the SecureComm VPN to continue.' });
+          console.log(`[${ts()}] [NET]  ${name} — WireGuard not active`);
+          return;
+        }
+      } else if (!isIPAllowed(clientIP)) {
+        // No WG client yet (shouldn't happen post-approval) — fall back to IP check
+        send(ws, { type: 'network_required', deviceId, wgConfig: null, message: 'Connect to the secure network to access SecureComm.' });
+        console.log(`[${ts()}] [NET]  ${name} — no WG client, blocked IP ${clientIP}`);
+        return;
+      }
+
+      // Bind device ID on first login if not yet set
+      if (!user.device_id && deviceId) {
+        await db.bindDeviceId(user.user_id, deviceId);
+        console.log(`[${ts()}] [BIND] ${name} → device ${deviceId.slice(0,8)}`);
+      }
 
       const { user_id: userId, role, avatar } = user;
       const token  = issueToken(userId, name, role, avatar);
@@ -232,7 +297,7 @@ wss.on('connection', (ws, req) => {
         console.error(`[${ts()}] [WG]   Failed to create WireGuard client: ${e.message}`);
       }
 
-      await db.createUser(userId, req.name, req.role, req.avatar, req.passwordHash, wgClientId);
+      await db.createUser(userId, req.name, req.role, req.avatar, req.passwordHash, wgClientId, req.deviceId || null);
       await db.removePendingRequest(msg.reqId);
       pendingRequests.delete(msg.reqId);
       console.log(`[${ts()}] [OK]   Approved: ${req.name}`);
@@ -280,6 +345,40 @@ wss.on('connection', (ws, req) => {
         name: req.name, pendingRequests: pendingList(),
       });
       send(ws, { type: 'action_ok', message: `✕ ${req.name} rejected.` });
+      return;
+    }
+
+    // ── GENERATE / RESEND WG CONFIG (admin only) ────────────────────────────────
+    if (msg.type === 'generate_wg') {
+      const client = activeClients.get(ws);
+      if (!client || client.role !== 'admin') return;
+
+      const user = await db.findUserById(msg.userId);
+      if (!user) { send(ws, { type: 'error', message: 'User not found.' }); return; }
+
+      // Delete old WG client if exists
+      if (user.wg_client_id) {
+        try { await wg.deleteClient(user.wg_client_id); } catch (_) {}
+      }
+
+      try {
+        const { clientId, config } = await wg.createClient(`${user.name}_${user.user_id.slice(-4)}`);
+        await db.pool.query('UPDATE users SET wg_client_id = $1 WHERE user_id = $2', [clientId, user.user_id]);
+
+        // Push config to user if they're currently connected (on pending/network screen)
+        for (const [uws, c] of activeClients) {
+          if (c.userId === user.user_id && uws.readyState === WebSocket.OPEN) {
+            send(uws, { type: 'wg_config', wgConfig: config });
+            break;
+          }
+        }
+
+        send(ws, { type: 'action_ok', message: `✓ WireGuard config generated for ${user.name}.` });
+        console.log(`[${ts()}] [WG]   Regenerated config for ${user.name}`);
+        await db.logAudit('wg_generated', client.name, user.name);
+      } catch (e) {
+        send(ws, { type: 'error', message: `WG generation failed: ${e.message}` });
+      }
       return;
     }
 

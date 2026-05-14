@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { connect, send, disconnect } from './ws.js';
+import { connect, send, disconnect, deviceId } from './ws.js';
 import SplashScreen   from './screens/SplashScreen.jsx';
 import LoginScreen    from './screens/LoginScreen.jsx';
 import RegisterScreen from './screens/RegisterScreen.jsx';
@@ -8,6 +8,7 @@ import VpnScreen      from './screens/VpnScreen.jsx';
 import GroupsScreen   from './screens/GroupsScreen.jsx';
 import ChatScreen     from './screens/ChatScreen.jsx';
 import RejectedScreen from './screens/RejectedScreen.jsx';
+import NetworkScreen  from './screens/NetworkScreen.jsx';
 import './index.css';
 
 export default function App() {
@@ -48,6 +49,17 @@ export default function App() {
 
       case 'rejected':
         setScreen('rejected');
+        break;
+
+      case 'network_required':
+        if (msg.wgConfig) setWgConfig(msg.wgConfig);
+        setScreen('network');
+        break;
+
+      case 'wg_config':
+        // HQ pushed a fresh WireGuard config — show VPN setup screen
+        setWgConfig(msg.wgConfig);
+        setScreen('vpn');
         break;
 
       case 'login_error':
@@ -126,6 +138,7 @@ export default function App() {
   };
 
   if (screen === 'rejected')  return <RejectedScreen onBack={() => setScreen('login')} />;
+  if (screen === 'network')   return <NetworkScreen deviceId={deviceId} wgConfig={wgConfig} onBack={() => setScreen('login')} />;
   if (screen === 'splash')    return <SplashScreen />;
   if (screen === 'login')     return <LoginScreen onLogin={doLogin} onGoRegister={() => setScreen('register')} wsStatus={wsStatus} />;
   if (screen === 'register')  return <RegisterScreen onRegister={doRegister} onBack={() => setScreen('login')} />;
