@@ -156,7 +156,7 @@ export default function App() {
   if (screen === 'login')     return <LoginScreen onLogin={doLogin} onGoRegister={() => setScreen('register')} wsStatus={wsStatus} />;
   if (screen === 'register')  return <RegisterScreen onRegister={doRegister} onBack={() => setScreen('login')} />;
   if (screen === 'pending')   return <PendingScreen reqId={reqId} />;
-  if (screen === 'vpn')       return <VpnScreen config={wgConfig} onContinue={() => setScreen('groups')} />;
+  if (screen === 'vpn')       return <VpnScreen config={wgConfig} />;
   if (screen === 'groups')    return (
     <GroupsScreen
       user={user} groups={groups} onlineUsers={onlineUsers} wsStatus={wsStatus}

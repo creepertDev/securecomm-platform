@@ -1,6 +1,6 @@
 import s from './screens.module.css';
 
-export default function VpnScreen({ config, onContinue }) {
+export default function VpnScreen({ config }) {
 
   function downloadConfig() {
     const blob = new Blob([config], { type: 'text/plain' });
@@ -93,12 +93,13 @@ export default function VpnScreen({ config, onContinue }) {
           </div>
         )}
 
-        <button className={s.btn} onClick={onContinue}>
-          CONTINUE TO APP
-        </button>
-        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: -12 }}>
-          You can download the config again from the network screen if needed
-        </p>
+        <div style={{
+          background: 'rgba(27,94,32,0.08)', border: '1px solid rgba(27,94,32,0.25)',
+          borderRadius: 12, padding: '14px 16px',
+          fontSize: 12, color: 'var(--muted)', lineHeight: 1.7, textAlign: 'center',
+        }}>
+          Once the tunnel is active, go back and <strong style={{ color: '#4CAF50' }}>log in again</strong> — the system will verify your VPN connection automatically.
+        </div>
       </div>
     </div>
   );
