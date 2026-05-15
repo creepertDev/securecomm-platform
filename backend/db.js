@@ -1,5 +1,6 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-const { Pool } = require('pg');
+const { Pool }         = require('pg');
+const { randomBytes }  = require('crypto');
 
 // Parse DB_URL into explicit params to avoid pg SASL password-string issues
 function buildPoolConfig() {
@@ -66,6 +67,11 @@ async function init() {
         from_avatar  TEXT NOT NULL,
         text         TEXT NOT NULL,
         created_at   TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS channel_keys (
+        channel_id TEXT PRIMARY KEY,
+        key_b64    TEXT NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS audit_log (
@@ -289,6 +295,47 @@ async function getAuditLog(limit = 100) {
   return res.rows;
 }
 
+// ── Channel encryption keys ──────────────────────────────────────────────────
+
+/**
+ * Returns the AES-256-GCM key (base64) for a channel, creating it if needed.
+ * channelId is 'global' for the global chat, or a group_id for group chats.
+ */
+async function getOrCreateChannelKey(channelId) {
+  const res = await pool.query(
+    'SELECT key_b64 FROM channel_keys WHERE channel_id = $1', [channelId]
+  );
+  if (res.rows.length > 0) return res.rows[0].key_b64;
+
+  const key = randomBytes(32).toString('base64'); // 256-bit AES key
+  await pool.query(
+    'INSERT INTO channel_keys (channel_id, key_b64) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [channelId, key]
+  );
+  // Re-fetch in case of concurrent insert
+  const res2 = await pool.query(
+    'SELECT key_b64 FROM channel_keys WHERE channel_id = $1', [channelId]
+  );
+  return res2.rows[0].key_b64;
+}
+
+/**
+ * Returns all channel keys a user has access to:
+ * { global: 'b64', grp_xxx: 'b64', ... }
+ */
+async function getUserChannelKeys(userId) {
+  const keys = {};
+  keys['global'] = await getOrCreateChannelKey('global');
+
+  const groups = await pool.query(
+    'SELECT group_id FROM group_members WHERE user_id = $1', [userId]
+  );
+  for (const { group_id } of groups.rows) {
+    keys[group_id] = await getOrCreateChannelKey(group_id);
+  }
+  return keys;
+}
+
 module.exports = {
   pool, init,
   // users
@@ -302,4 +349,6 @@ module.exports = {
   addPendingRequest, removePendingRequest,
   // audit
   logAudit, getAuditLog,
+  // encryption
+  getOrCreateChannelKey, getUserChannelKeys,
 };

@@ -256,6 +256,9 @@ wss.on('connection', (ws, req) => {
           wgConfig = confRes;
         } catch (_) {}
       }
+      // Fetch channel encryption keys for this user
+      const channelKeys = await db.getUserChannelKeys(userId);
+
       send(ws, {
         type: 'welcome',
         userId, name, role, avatar, token,
@@ -263,6 +266,7 @@ wss.on('connection', (ws, req) => {
         users: onlineUserList(),
         groups: groups.map(g => ({ groupId: g.group_id, name: g.name, description: g.description })),
         wgConfig,
+        channelKeys,
       });
       broadcastToAll({ type: 'user_joined', user: { userId, name, role, avatar }, users: onlineUserList() }, ws);
       await db.logAudit('user_joined', name);
@@ -419,6 +423,7 @@ wss.on('connection', (ws, req) => {
 
       const groupId = 'grp_' + crypto.randomBytes(4).toString('hex');
       const group   = await db.createGroup(groupId, name, desc, client.userId);
+      await db.getOrCreateChannelKey(groupId); // pre-generate encryption key
       console.log(`[${ts()}] [GRP]  Created: ${name}`);
 
       await db.logAudit('group_created', client.name, name);
@@ -518,8 +523,9 @@ wss.on('connection', (ws, req) => {
       const isMember = await db.isGroupMember(groupId, client.userId);
       if (!isMember) { send(ws, { type: 'error', message: 'Not a member of this group.' }); return; }
 
-      const history = await db.getGroupMessages(groupId, 50);
-      send(ws, { type: 'group_history', groupId, messages: history });
+      const history    = await db.getGroupMessages(groupId, 50);
+      const channelKey = await db.getOrCreateChannelKey(groupId);
+      send(ws, { type: 'group_history', groupId, messages: history, channelKey });
       return;
     }
 

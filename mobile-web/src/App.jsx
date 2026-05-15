@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { connect, send, disconnect, deviceId } from './ws.js';
+import { loadChannelKeys, encryptMsg, decryptMsg, decryptHistory } from './crypto.js';
 import SplashScreen   from './screens/SplashScreen.jsx';
 import LoginScreen    from './screens/LoginScreen.jsx';
 import RegisterScreen from './screens/RegisterScreen.jsx';
@@ -25,7 +26,7 @@ export default function App() {
   const [onlineUsers, setOnline]  = useState([]);
   const [activeGroup, setActive]  = useState(null);
 
-  const handleMessage = useCallback((msg) => {
+  const handleMessage = useCallback(async (msg) => {
     switch (msg.type) {
       case 'register_pending':
         setReqId(msg.reqId);
@@ -66,18 +67,23 @@ export default function App() {
         alert(msg.message || 'Invalid credentials.');
         break;
 
-      case 'welcome':
+      case 'welcome': {
+        await loadChannelKeys(msg.channelKeys);
+        const decryptedHistory = await decryptHistory(msg.history || [], 'global');
         setUser({ userId: msg.userId, name: msg.name, role: msg.role, avatar: msg.avatar, token: msg.token });
         if (msg.token) localStorage.setItem('sc_token', msg.token);
-        setGlobal((msg.history || []).map(normalizeMsg));
+        setGlobal(decryptedHistory.map(normalizeMsg));
         setOnline(msg.users || []);
         setGroups(msg.groups || []);
         if (msg.wgConfig) setWgConfig(msg.wgConfig);
-        setScreen('groups'); // Returning users go straight to groups
+        setScreen('groups');
         break;
+      }
 
       case 'message': {
-        const m = normalizeMsg(msg);
+        const channelId = msg.groupId || 'global';
+        const decryptedText = await decryptMsg(channelId, msg.text);
+        const m = normalizeMsg({ ...msg, text: decryptedText });
         if (m.groupId) {
           setGroupMsgs(prev => ({ ...prev, [m.groupId]: [...(prev[m.groupId] || []), m] }));
         } else {
@@ -86,11 +92,14 @@ export default function App() {
         break;
       }
 
-      case 'group_history':
+      case 'group_history': {
         if (msg.groupId) {
-          setGroupMsgs(prev => ({ ...prev, [msg.groupId]: (msg.messages || []).map(normalizeMsg) }));
+          if (msg.channelKey) await loadChannelKeys({ [msg.groupId]: msg.channelKey });
+          const decrypted = await decryptHistory(msg.messages || [], msg.groupId);
+          setGroupMsgs(prev => ({ ...prev, [msg.groupId]: decrypted.map(normalizeMsg) }));
         }
         break;
+      }
 
       case 'added_to_group':
         if (msg.group) setGroups(prev =>
@@ -120,7 +129,11 @@ export default function App() {
 
   const doLogin    = (name, pass) => send({ type: 'login', name, password: pass });
   const doRegister = (name, role, pass) => send({ type: 'register', name, role, password: pass });
-  const doSend     = (text, groupId) => send({ type: 'message', text, ...(groupId ? { groupId } : {}) });
+  const doSend     = async (text, groupId) => {
+    const channelId = groupId || 'global';
+    const encrypted = await encryptMsg(channelId, text);
+    send({ type: 'message', text: encrypted, ...(groupId ? { groupId } : {}) });
+  };
   const doTyping   = (isTyping, groupId) => send({ type: 'typing', isTyping, ...(groupId ? { groupId } : {}) });
   const joinGroup  = (groupId) => send({ type: 'join_group', groupId });
 
